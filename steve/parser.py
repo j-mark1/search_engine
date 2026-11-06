@@ -1,10 +1,11 @@
 from bs4 import BeautifulSoup
+from collections import Counter
 import re
 
 def tokenize(page_response_content):
     soup = BeautifulSoup(page_response_content, "lxml")
 
-    tokens = set(re.findall(r"\w+", soup.get_text(separator=" ").lower()))
+    tokens = Counter(re.findall(r"\w+", soup.get_text(separator=" ").lower()))
 
     return tokens
 
@@ -18,4 +19,4 @@ def load_stopwords(path="stopwords.txt"):
 STOPWORDS = load_stopwords()
 
 def remove_stopwords(tokens):
-    return tokens - STOPWORDS
+    return Counter(word for word in tokens if word not in STOPWORDS)
