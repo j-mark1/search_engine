@@ -6,4 +6,4 @@ from invertedIndex import IndexConstructor
 if __name__ == "__main__":
     
     ic = IndexConstructor()
-    ic.create("data/ANALYST", "out", "myInvIndex")
+    ic.create("data/DEV", "out", "myInvIndex")

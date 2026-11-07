@@ -48,7 +48,7 @@ class IndexConstructor:
     DOCID_TO_NAME_FEXT    = ".idtn"
 
 
-    MAX_POSTINGS_COUNT    = 1000
+    MAX_POSTINGS_COUNT    = 10000
 
     def __init__(self):
         # map<string, list<posting>> 
@@ -114,9 +114,12 @@ class IndexConstructor:
                     position += 1
 
                 abc += 1
-                if abc >= 10:
-                    print("REMOVE ME")
-                    break
+                # if abc >= 10:
+                #     print("REMOVE ME")
+                #     break
+
+            if self.partialInvIndex:
+                self.savePartialInvIndex()
 
 
     def addPostingToIndex(self, did: int, token: str, position: int):
@@ -153,8 +156,10 @@ class IndexConstructor:
                 for posting in self.partialInvIndex[token]:
                     posting_dict = {"did": posting.did, "positions": posting.positions}
                     posting_list.append(posting_dict)
-                json_dict[token].append(posting_list)
+                json_dict[token] = posting_list
             json.dump(json_dict, file, indent=2)
+        self.numPostings = 0
+        self.partialInvIndex = dict()
                 
 
 
