@@ -14,3 +14,4 @@ for file_path in target_dir.glob("*.index"):
 
 ri = ReverseIndexer()
 ri.create_index()
+ri.find_related_docs("absent")

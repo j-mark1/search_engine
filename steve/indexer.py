@@ -107,3 +107,20 @@ class ReverseIndexer:
             f.close()
             
         return word_finder
+
+    def find_related_docs(self, word):
+        with open("words_index.index", "w", encoding="utf-8") as words_index:
+            w_offset = self.word_finder[word]
+            words_index.seek(w_offset)
+
+            line = words_index.readline()
+            postings = line.split("|")[1]
+            posting_list = postings.split(",")
+
+            with open("document_ids.index", "w", encoding="utf-8") as doc_index:
+                for posting in posting_list:
+                    doc_id = posting.split(":")[0]
+                    d_offset = self.doc_finder[doc_id]
+                    doc_index.seek(d_offset)
+                    line = doc_index.readline()
+                    print(line.split("|")[1])
