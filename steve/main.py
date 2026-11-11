@@ -12,6 +12,8 @@ for file_path in target_dir.glob("*.index"):
         except Exception as e:
             print(f"Error deleting {file_path}: {e}")
 
-ri = ReverseIndexer()
-ri.create_index()
-ri.find_related_docs("absent")
+ri = ReverseIndexer("data/DEV", "out")
+if not ri.restore():
+    ri.create_index()
+ri.save()
+ri.print_report()

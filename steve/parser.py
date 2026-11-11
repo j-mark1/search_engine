@@ -3,9 +3,16 @@ from collections import Counter
 import re
 
 def tokenize(page_response_content):
-    soup = BeautifulSoup(page_response_content, "lxml")
-
-    tokens = Counter(re.findall(r"\w+", soup.get_text(separator=" ").lower()))
+    try:
+        soup = BeautifulSoup(page_response_content, "lxml")
+        tokens = Counter(re.findall(r"\w+", soup.get_text(separator=" ").lower()))
+    except (ValueError, Exception):
+        # If parse error, try again with html.parser
+        try:
+            soup = BeautifulSoup(page_response_content, "html.parser")
+            tokens = Counter(re.findall(r"\w+", soup.get_text(separator=" ").lower()))
+        except Exception:
+            return Counter()  # Skip completely if it's unparseable
 
     return tokens
 
@@ -19,4 +26,10 @@ def load_stopwords(path="stopwords.txt"):
 STOPWORDS = load_stopwords()
 
 def remove_stopwords(tokens):
-    return Counter(word for word in tokens if word not in STOPWORDS)
+    cleaned_tokens = {}
+    
+    for word in tokens:
+        if word not in STOPWORDS:
+            cleaned_tokens[word] = tokens[word]
+
+    return cleaned_tokens
