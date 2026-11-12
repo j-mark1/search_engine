@@ -1,0 +1,3 @@
+[submodule "jasen"]
+	path = jasen
+	url = git@github-personal:JsnMark/search-engine-jasen.git
