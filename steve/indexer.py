@@ -3,6 +3,7 @@ import json
 from parser import *
 import heapq
 import json
+import math
 
 class ReverseIndexer:
     def __init__(self, data_path, out_path):
@@ -45,7 +46,7 @@ class ReverseIndexer:
                         self.create_new_word_block()
 
                     # Document Indexer - Index docs and doc_ids
-                    self.doc_finder[doc_id] = doc_id_file.tell() # Store byte offset
+                    self.doc_finder[str(doc_id)] = doc_id_file.tell() # Store byte offset
                     doc_id_file.write(f"{doc_id}|{file.name}\n")  
 
                 doc_id += 1  
@@ -130,36 +131,47 @@ class ReverseIndexer:
             words_index.seek(w_offset)
 
             line = words_index.readline()
+
+            # Format: word|doc_id:frequency:term_ratio, ...
             postings = line.split("|")[1]
             posting_list = postings.split(",")
-            related_docs = []
+            related_docs = {}
 
-            with open("document_ids.index", "r", encoding="utf-8") as doc_index:
+            with open(f"{self.output_path}/document_ids.index", "r", encoding="utf-8") as doc_index:
                 for posting in posting_list:
-                    doc_id = posting.split(":")[0]
+                    split_posting = posting.split(":")
+                    doc_id = split_posting[0]
+                    freq = int(split_posting[1])
                     
-                    d_offset = self.doc_finder[int(doc_id)]
+                    d_offset = self.doc_finder[doc_id]
                     doc_index.seek(d_offset)
+                    # Format: docId | url
                     line = doc_index.readline()
-                    # Format: docID | url
-                    related_docs.append(line.split("|")[1])
+                    # Format: docID: [url, term frequency]
+                    related_docs[doc_id] = [line.split("|")[1], freq]
             
         return related_docs
 
-    def query(self, query):
+    def query(self, query, number_of_results):
         scores = {}
         words = query.lower().split()
 
-        for word in query:
-            related_docs = _find_related_docs(word)
+        for word in words:
+            related_docs = self._find_related_docs(word)
 
             # Word does not exist in any document
             if len(related_docs) == 0:
                 continue
         
-            idf = math.log(total_docs / (1 + len(related_docs)))
+            idf = math.log(self.doc_count / (1 + len(related_docs)))
 
-            # Construct tfidf and do the rest...
+            for doc_id, info in related_docs.items():
+                if doc_id not in scores:
+                    scores[doc_id] = [info[0], info[1] * idf]
+                else:
+                    scores[doc_id][1] += info[1] * idf
+
+        return sorted(scores.items(), key=lambda x: x[1][1], reverse=True)[:number_of_results]
 
 
 
