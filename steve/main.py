@@ -1,5 +1,7 @@
 from pathlib import Path
 from indexer import ReverseIndexer
+import time
+import sys
 
 def print_query_results(search, results):
     print(f"* Query Results for {search}:")
@@ -10,10 +12,10 @@ def print_query_results(search, results):
         tfidf = result[1][1]
 
         print(
-f"""|
-| Doc ID: {docID}
-| URL: {url}
-| TFIDF Score:{tfidf}"""
+f"""
+ Doc ID: {docID}
+ path: {url}
+ TFIDF Score:{tfidf}"""
         )
     print("+---------------------------------------\n")
 
@@ -34,8 +36,16 @@ if not ri.restore():
     ri.save()
 ri.print_report()
 
+args = sys.argv[1:]
 searches = ["cristina lopes", "machine learning", "ACM", "master of software engineering"]
+if not(args is None or len(args) == 0):
+    searches = [" ".join(args)]
+
+
 for search in searches:
+    start_time = time.perf_counter()
     results = ri.query(search, 5)
+    end_time = time.perf_counter()
+    print(f"Elapsed time: {end_time - start_time:.4f} seconds")
     print_query_results(search, results)
 
