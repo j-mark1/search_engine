@@ -51,3 +51,28 @@ class SearchEngine:
         cosine = {doc: score / self.norms[doc] for doc, score in scores.items()}
         best = heapq.nlargest(RESULTS_TO_SHOW, cosine.items(), key=lambda item: item[1])
         return len(cosine), [(self.urls[doc], score) for doc, score in best]
+
+def main():
+    if not (INDEX_DIR / "lexicon.tsv").exists():
+        sys.exit("No index found. Run: python indexer.py /path/to/DEV")
+    print("Loading index...")
+    engine = SearchEngine()
+    print(f"Ready: {len(engine.urls):,} pages, {len(engine.lexicon):,} terms. Press Enter on an empty line to quit.\n")
+    while True:
+        try:
+            query = input("search> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            break
+        if not query:
+            break
+        start = time.perf_counter()
+        matches, results = engine.search(query)
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        print(f"{matches:,} pages contain all terms ({elapsed_ms:.0f} ms)")
+        for rank, (url, score) in enumerate(results, 1):
+            print(f"  {rank}. {url}   (score {score:.2f})")
+        print()
+
+
+if __name__ == "__main__":
+    main()
