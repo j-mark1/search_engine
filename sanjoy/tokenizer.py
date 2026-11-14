@@ -32,4 +32,4 @@ def weighted_term_counts(html):
         for tag in soup.find_all(tag_name):
             for term in tokenize_text(tag.get_text(" ")):
                 counts[term] += extra_weight
-    return countswh
+    return counts
