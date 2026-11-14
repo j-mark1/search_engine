@@ -54,3 +54,34 @@ def build_partials(files):
     if index:
         partials.append(write_partial(index, len(partials)))
     return partials, doc_id
+
+def term_of(line):
+    return line.split("\t", 1)[0]
+
+def merge_partials(partials, num_docs):
+    handles = [open(path, encoding="utf-8") for path in partials]
+    merged_lines = heapq.merge(*handles, key=term_of)
+    squared_lengths = [0.0] * num_docs
+    num_terms = 0
+    with open(INDEX_DIR / "postings.txt", "w", encoding="utf-8") as postings_out, open(INDEX_DIR / "lexicon.tsv", "w", encoding="utf-8") as lexicon_out:
+        for term, lines in itertools.groupby(merged_lines, key=term_of):
+            postings = []
+            for line in lines:
+                postings.extend(line.rstrip("\n").split("\t", 1)[1].split(" "))
+            idf = math.log10(num_docs / len(postings))
+            weighted = []
+            for posting in postings:
+                doc, count = posting.split(":")
+                weight = (1 + math.log10(int(count))) * idf
+                squared_lengths[int(doc)] += weight * weight
+                weighted.append(f"{doc}:{weight:.4f}")
+            lexicon_out.write(f"{term}\t{len(postings)}\t{postings_out.tell()}\n")
+            postings_out.write(f"{term}\t{' '.join(weighted)}\n")
+            num_terms += 1
+    for handle in handles:
+        handle.close()
+    for path in partials:
+        path.unlink()
+    with open(INDEX_DIR / "norms.txt", "w", encoding="utf-8") as norms_out:
+        norms_out.writelines(f"{math.sqrt(total):.6f}\n" for total in squared_lengths)
+    return num_terms
