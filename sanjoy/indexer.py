@@ -85,3 +85,21 @@ def merge_partials(partials, num_docs):
     with open(INDEX_DIR / "norms.txt", "w", encoding="utf-8") as norms_out:
         norms_out.writelines(f"{math.sqrt(total):.6f}\n" for total in squared_lengths)
     return num_terms
+
+def main():
+    if len(sys.argv) != 2:
+        sys.exit("usage: python indexer.py /path/to/DEV")
+    INDEX_DIR.mkdir(exist_ok=True)
+    files = sorted(Path(sys.argv[1]).rglob("*.json"))
+    print(f"Indexing {len(files):,} files...")
+    start = time.time()
+
+    partials, num_docs = build_partials(files)
+    print(f"Merging {len(partials)} partial indexes...")
+    num_terms = merge_partials(partials, num_docs)
+
+    size_kb = sum(f.stat().st_size for f in INDEX_DIR.iterdir()) / 1024
+    print(f"Done in {time.time() - start:.0f}s: {num_docs:,} unique pages, {num_terms:,} unique terms, {size_kb:,.0f} KB on disk")
+
+if __name__ == "__main__":
+    main()
