@@ -16,7 +16,7 @@ def tokenize(page_response_content):
 
     return tokens
 
-def load_stopwords(path="stopwords.txt"):
+def load_stopwords(path="indexing/stopwords.txt"):
     words = set()
     with open(path, encoding="utf-8") as file:
         for line in file:

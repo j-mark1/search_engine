@@ -1,0 +1,62 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search Results - ICSearch</title>
+    <link rel="stylesheet" href="static/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&family=Saira:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+</head>
+<body>
+    <header>
+        <a href="home" class="sub-logo">IC<span>Search</span></a>
+        <div class="search-container">
+            <form class="search-form-results" action="results" method="GET">
+                <input
+                    type="text"
+                    name="q"
+                    placeholder="What are you looking for?"
+                    autocomplete="on"
+                    value="{{ query }}"
+                    required
+                >
+                <button type="submit">
+                    <img src="static/search.svg" alt="Search icon" width="20" height="20">
+                </button>
+            </form>
+        </div>
+    </header>
+    <main class="results-container">
+        <p class="results-info">
+            Search results for <strong>{{ query }}</strong>
+        </p>
+        {% if results %}
+            {% for result in results %}
+                <div class="result">
+                    <p class="result-url">
+                        {{ results[result]["file"] }}
+                    </p>
+                    <a href="external?file={{ results[result]['file'] }}" class="result-title">
+                        Doc ID: {{ result }}
+                    </a>
+                    <p class="result-description">
+                        TFIDF score: {{ results[result]["tfidf"] }}
+                    </p>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="no-results">
+                <p><strong>No results found.</strong></p>
+                <p>No documents matched the terms contained in your search</p>
+            </div>
+        {% endif %}
+    </main>
+    <footer>
+        ICSearch
+    </footer>
+</body>
+</html>

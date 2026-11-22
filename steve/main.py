@@ -1,51 +1,38 @@
-from pathlib import Path
-from indexer import ReverseIndexer
-import time
-import sys
+from flask import Flask, render_template, request, url_for, redirect
+from indexing.search import run_search
+import os
+import json
 
-def print_query_results(search, results):
-    print(f"* Query Results for {search}:")
+app = Flask(__name__)
 
-    for result in results:
-        docID = result[0]
-        url = result[1][0].strip()
-        tfidf = result[1][1]
+# Main search page
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-        print(
-f"""
- Doc ID: {docID}
- path: {url}
- TFIDF Score:{tfidf}"""
-        )
-    print("+---------------------------------------\n")
+# Retrieve query, run search, and show results page
+@app.route('/results')
+def results():
+    query = request.args.get("q", '')
+    results = run_search(query)
+    print(results)
+    return render_template('results.html', query=query, results=results)
 
-# Set the directory you want to search
-target_dir = Path("./steve")
+# Return to main page when clicking logo title
+@app.route('/home')
+def return_to_index():
+    return index()
 
-for file_path in target_dir.glob("*.index"):
-    if file_path.is_file():  # Ensure it's a file and not a subfolder
-        try:
-            file_path.unlink()
-            print(f"Deleted: {file_path}")
-        except Exception as e:
-            print(f"Error deleting {file_path}: {e}")
+# View actual page from retrieved document
+@app.route('/external')
+def go_external():
+    file = request.args.get("file", '',)
+    html_content = ""
 
-ri = ReverseIndexer("data/DEV", "out")
-if not ri.restore():
-    ri.create_index()
-    ri.save()
-ri.print_report()
-
-args = sys.argv[1:]
-searches = ["cristina lopes", "machine learning", "ACM", "master of software engineering"]
-if not(args is None or len(args) == 0):
-    searches = [" ".join(args)]
-
-
-for search in searches:
-    start_time = time.perf_counter()
-    results = ri.query(search, 5)
-    end_time = time.perf_counter()
-    print(f"Elapsed time: {end_time - start_time:.4f} seconds")
-    print_query_results(search, results)
-
+    print(file)
+    # Find json file that corresponds to the document, get the html content, and display
+    with open(file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+        html_content = data["content"]
+    
+    return html_content 

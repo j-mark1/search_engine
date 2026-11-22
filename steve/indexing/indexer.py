@@ -1,6 +1,6 @@
 from pathlib import Path
 import json
-from parser import *
+from indexing.parser import *
 import heapq
 import json
 import math
@@ -122,10 +122,13 @@ class ReverseIndexer:
         return word_finder
 
     def _find_related_docs(self, word):
+        # 
+        # @ word
         # Word does not exist in any document
         if word not in self.word_finder:
             return []
 
+        # TO DO: MAKE THIS STAY OPEN
         with open(f"{self.output_path}/words_index.index", "r", encoding="utf-8") as words_index:
             w_offset = self.word_finder[word]
             words_index.seek(w_offset)
@@ -167,11 +170,11 @@ class ReverseIndexer:
 
             for doc_id, info in related_docs.items():
                 if doc_id not in scores:
-                    scores[doc_id] = [info[0], info[1] * idf]
+                    scores[doc_id] = {"file": info[0], "tfidf": info[1] * idf}
                 else:
-                    scores[doc_id][1] += info[1] * idf
+                    scores[doc_id]["tfidf"] += info[1] * idf
 
-        return sorted(scores.items(), key=lambda x: x[1][1], reverse=True)[:number_of_results]
+        return dict(sorted(scores.items(), key=lambda x: x[1]["tfidf"], reverse=True)[:number_of_results])
 
 
 
