@@ -1,51 +1,108 @@
 from pathlib import Path
 import json
-from indexing.parser import *
+from parser import *
 import heapq
 import json
 import math
+import psutil
+import sys
 
+# Tracks and estimates the usage of memory to adjust to different machine requirements. 
+class MemoryUsage():
+    def __init__(self):
+        MAX_INDEX_SIZE = 256 * 1024 * 1024  # 256 MB index threshold, impose limit to ensure not just 1 partial index is made, even if machine can hold it all
+
+        self.available_memory = psutil.virtual_memory().available * 0.6
+        self.available_memory = min(
+            self.available_memory,
+            MAX_INDEX_SIZE
+        )
+        self.current_memory = 0
+        self.prev_index_size = 0
+
+    # Saves the shallow size of the current partial_index dictionary before any new terms
+    # from the next document are added.
+    # @ dict partial_index: Current in-memory dictionary containing the tokens and postings
+    # => return None
+    def set_prev_index_size(self, partial_index):
+        self.prev_index_size = sys.getsizeof(partial_index)
+        
+    # Update the amount of memory used by storing the sizes of the partial_index, key, and value.
+    # The amount added serves as a general estimate of the memory being used up.
+    # @ dict partial_index: Current in-memory dictionary containing the tokens and postings
+    # @ str key: The key that is being added to the partial_index
+    # @ str value: The value that is being added to the partial_index
+    # => return None
+    def update_memory_usage(self, partial_index, key, value):
+        self.current_memory += sys.getsizeof(key)
+        self.current_memory += sys.getsizeof(value)
+        self.current_memory += sys.getsizeof(partial_index) - self.prev_index_size
+
+    # Check whether the amount of memory used is over the memory limit threshold before flushing.
+    # => return boolean
+    def memory_threshold_surpassed(self):
+        if self.current_memory >= self.available_memory:
+            self.reset()
+            return True
+        return False
+
+    # Reset memory tracking
+    # => return None
+    def reset(self):
+        self.current_memory = 0
+        self.prev_index_size = 0
+
+
+# Creates, manages, and provides the query processing of the search engine's reversed index.
 class ReverseIndexer:
     def __init__(self, data_path, out_path):
         self.doc_finder = {}
         self.word_finder = {}
         self.all_words = {}
         folder_path = Path(data_path)
-        self.files = [file for file in folder_path.rglob("*") if file.is_file()]
+        self.files = [file for file in folder_path.rglob("*") if file.is_file()] # Get all json files from the folder path provided
         self.output_path = out_path
         self.block = 0
 
-        self.doc_count = 0
-        self.unique_words_count = 0
+        self.doc_count = 0 # Track total number of documents indexed
+        self.unique_words_count = 0 # Track total number of unique words
 
+    # Create a reverse index by first creating partial indexes and then merging them together.
+    # => return: None
     def create_index(self):
         doc_id = 0
+        memory = MemoryUsage()
 
-        # Have document indexer file ready
+        # Have document_id index file ready. Create if it does not exist.
         with open(f"{self.output_path}/document_ids.index", 'w', encoding='utf-8') as doc_id_file:
             for file in self.files:
-                self.doc_count += 1 # For report
+                self.doc_count += 1
                 document_tokens = None
 
                 with open(file, 'r', encoding='utf-8') as file:
                     data = json.load(file)
-                    tokens = tokenize(data["content"]) # returns Counter
+                    tokens, positions = tokenize(data["content"]) # returns Counter containing tokens and count
                     total_freq = tokens.total()
 
                     document_tokens = remove_stopwords(tokens)
 
+                    # Store tokens and related term information in memory until memory threshold is passed.
                     for token in document_tokens:
                         if token not in self.all_words:
                             self.all_words[token] = []
 
-                        # Format: word|doc_id:frequency:term_ratio, ...
-                        self.all_words[token].append(f"{doc_id}:{document_tokens[token]}:{round(document_tokens[token]/total_freq, 2)}")
+                        posting = f"{doc_id}:{document_tokens[token]}:{round(document_tokens[token]/total_freq, 2)}:{positions[token]}"
+                        memory.set_prev_index_size(self.all_words)
 
-                    # Create new block
-                    if len(self.all_words) > 10000:
+                        # Format: word|doc_id:frequency:term_ratio:positions, ...
+                        self.all_words[token].append(posting)
+                        memory.update_memory_usage(self.all_words, token, posting)
+
+                    # If memory threshold is passed, write block in disk and create new block
+                    if memory.memory_threshold_surpassed():
                         self.create_new_word_block()
 
-                    # Document Indexer - Index docs and doc_ids
+                    # Document Index File - Index and write docs and doc_ids into disk
                     self.doc_finder[str(doc_id)] = doc_id_file.tell() # Store byte offset
                     doc_id_file.write(f"{doc_id}|{file.name}\n")  
 
@@ -63,9 +120,10 @@ class ReverseIndexer:
         with open(f"{self.output_path}/words{self.block}.index", 'w', encoding='utf-8') as word_block:
             for word in sorted(self.all_words.keys()):
                 self.word_finder[word] = word_block.tell() # Store byte offset
-                word_block.write(f"{word}|{','.join(self.all_words[word])}\n")
+                word_block.write(f"{word}|{';'.join(self.all_words[word])}\n")
         self.all_words = {}
         self.block += 1
+        print("New block created.")
 
     def merge_all_blocks(self):
         block_files = []
@@ -100,7 +158,7 @@ class ReverseIndexer:
                         word_finder[current_term] = offset
 
                         # 2. Write the combined term and postings
-                        out_file.write(f"{current_term}|{','.join(current_postings)}\n")
+                        out_file.write(f"{current_term}|{';'.join(current_postings)}\n")
                     
                     # Reset tracking for new word
                     current_term = term
@@ -111,9 +169,11 @@ class ReverseIndexer:
                     
             # Write the final remaining word after the loop ends
             if current_term is not None:
+                self.unique_words_count += 1 # For report
+                
                 offset = out_file.tell()
                 word_finder[current_term] = offset
-                out_file.write(f"{current_term}|{','.join(current_postings)}\n")
+                out_file.write(f"{current_term}|{';'.join(current_postings)}\n")
                 
         # Close all block file handles
         for f in file_handles:
@@ -122,8 +182,7 @@ class ReverseIndexer:
         return word_finder
 
     def _find_related_docs(self, word):
-        # 
-        # @ word
+
         # Word does not exist in any document
         if word not in self.word_finder:
             return []
@@ -137,7 +196,7 @@ class ReverseIndexer:
 
             # Format: word|doc_id:frequency:term_ratio, ...
             postings = line.split("|")[1]
-            posting_list = postings.split(",")
+            posting_list = postings.split(";")
             related_docs = {}
 
             with open(f"{self.output_path}/document_ids.index", "r", encoding="utf-8") as doc_index:

@@ -1,2 +1,5 @@
 beautifulsoup4
+collections
 Flask
+psutil
+sys

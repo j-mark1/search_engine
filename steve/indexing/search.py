@@ -25,7 +25,7 @@ f"""
 # Run a search with the given query. If no pages have been indexed, run indexer and index all documents.
 # Otherwise, skip and go straight to search.
 # @ str query: the query being searched.
-# return: Dictionary of documents that matches the query in the following format: {docId: {"file": str, "tfidf": float}, ...}
+# => return: Dictionary of documents that matches the query in the following format: {docId: {"file": str, "tfidf": float}, ...}
 def run_search(query):
     global already_restored
     global ri
@@ -34,9 +34,8 @@ def run_search(query):
         # If documents have all been indexed and merged into a reversed index, restore index stats
         # and use the existing index. Restore only once for efficiency.
         if not ri.restore():
-            # Failed to restore. No save file exists. Restart indexing and save.
-            ri.create_index()
-            ri.save()
+            # Failed to restore. No save file exists.
+            raise IndexError("No index found.")
         already_restored = True
 
     start_time = time.perf_counter() # Time how long it takes to get search results
@@ -69,11 +68,9 @@ if __name__ == "__main__":
     if not(args is None or len(args) == 0):
         searches = [" ".join(args)]
 
-
     for search in searches:
         start_time = time.perf_counter()
         results = ri.query(search, 5)
         end_time = time.perf_counter()
         print(f"Elapsed time: {end_time - start_time:.4f} seconds")
         print_query_results(search, results)
-
