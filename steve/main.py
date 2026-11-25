@@ -15,7 +15,6 @@ def index():
 def results():
     query = request.args.get("q", '')
     results = run_search(query)
-    print(results)
     return render_template('results.html', query=query, results=results)
 
 # Return to main page when clicking logo title

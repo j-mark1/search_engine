@@ -1,4 +1,4 @@
-from indexer import ReverseIndexer
+from indexing.indexer import ReverseIndexer
 from pathlib import Path
 import time
 

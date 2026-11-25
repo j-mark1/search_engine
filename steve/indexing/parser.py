@@ -46,7 +46,7 @@ def tokenize(page_response_content):
         except Exception:
             return Counter(), {}  # Skip completely if it's unparseable
 
-    # del soup # Delete after use to reuse some memory
+    del soup # Delete after use to reuse some memory
 
     tokens = Counter(all_individual_tokens)
     positions = defaultdict(list)
@@ -54,7 +54,7 @@ def tokenize(page_response_content):
         if token not in STOPWORDS:
             positions[token].append(i)
     
-    # del all_individual_tokens # Delete after use to reuse some memory
+    del all_individual_tokens # Delete after use to reuse some memory
 
     positions = {token: ",".join(map(str, pos)) for token, pos in positions.items()}
 

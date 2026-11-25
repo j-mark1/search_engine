@@ -1,6 +1,6 @@
 from pathlib import Path
 import json
-from parser import *
+from indexing.parser import *
 import heapq
 import json
 import math
@@ -67,6 +67,9 @@ class ReverseIndexer:
         self.doc_count = 0 # Track total number of documents indexed
         self.unique_words_count = 0 # Track total number of unique words
 
+        self.words_index = None
+        self.docs_index = None
+
     # Create a reverse index by first creating partial indexes and then merging them together.
     # => return: None
     def create_index(self):
@@ -91,7 +94,7 @@ class ReverseIndexer:
                         if token not in self.all_words:
                             self.all_words[token] = []
 
-                        posting = f"{doc_id}:{document_tokens[token]}:{round(document_tokens[token]/total_freq, 2)}:{positions[token]}"
+                        posting = f"{doc_id}:{document_tokens[token]}:{round(document_tokens[token]/total_freq, 4)}:{positions[token]}"
                         memory.set_prev_index_size(self.all_words)
 
                         # Format: word|doc_id:frequency:term_ratio:positions, ...
@@ -170,7 +173,7 @@ class ReverseIndexer:
             # Write the final remaining word after the loop ends
             if current_term is not None:
                 self.unique_words_count += 1 # For report
-                
+
                 offset = out_file.tell()
                 word_finder[current_term] = offset
                 out_file.write(f"{current_term}|{';'.join(current_postings)}\n")
@@ -182,43 +185,53 @@ class ReverseIndexer:
         return word_finder
 
     def _find_related_docs(self, word):
+        # Clean query
+        word = re.sub(r"[^a-z0-9]", "", word.lower())
 
         # Word does not exist in any document
         if word not in self.word_finder:
             return []
 
-        # TO DO: MAKE THIS STAY OPEN
-        with open(f"{self.output_path}/words_index.index", "r", encoding="utf-8") as words_index:
-            w_offset = self.word_finder[word]
-            words_index.seek(w_offset)
+        w_offset = self.word_finder[word]
+        self.words_index.seek(w_offset)
 
-            line = words_index.readline()
+        line = self.words_index.readline()
 
-            # Format: word|doc_id:frequency:term_ratio, ...
-            postings = line.split("|")[1]
-            posting_list = postings.split(";")
-            related_docs = {}
+        # Format: word|doc_id:frequency:term_ratio:positions; ...
+        postings = line.split("|")[1]
+        posting_list = postings.split(";")
+        related_docs = {}
 
-            with open(f"{self.output_path}/document_ids.index", "r", encoding="utf-8") as doc_index:
-                for posting in posting_list:
-                    split_posting = posting.split(":")
-                    doc_id = split_posting[0]
-                    freq = int(split_posting[1])
-                    
-                    d_offset = self.doc_finder[doc_id]
-                    doc_index.seek(d_offset)
-                    # Format: docId | url
-                    line = doc_index.readline()
-                    # Format: docID: [url, term frequency]
-                    related_docs[doc_id] = [line.split("|")[1], freq]
+        for posting in posting_list:
+            split_posting = posting.split(":")
+            doc_id = split_posting[0]
+            frequency = int(split_posting[1])
+            tf_ratio = float(split_posting[2])
+            positions = set(split_posting[3].split(","))
+            
+            d_offset = self.doc_finder[doc_id]
+            self.doc_index.seek(d_offset)
+            # Format: docId | url
+            line = self.doc_index.readline()
+            # Format: {docID: [url, tf ratio, [positions,...]]}
+            related_docs[doc_id] = [line.split("|")[1], 1 + math.log(frequency), positions]
             
         return related_docs
 
     def query(self, query, number_of_results):
+        # Open the reversed index and doc index throughout entire query
+        self.words_index = open(f"{self.output_path}/words_index.index", "r", encoding="utf-8")
+        self.doc_index = open(f"{self.output_path}/document_ids.index", "r", encoding="utf-8")
+
         scores = {}
         words = query.lower().split()
 
-        for word in words:
+        prev_related_doc_ids = None
+        related_doc_ids = None
+        positions = {}
+
+        for i, word in enumerate(words):
+            print(f"Now in: {word}")
             related_docs = self._find_related_docs(word)
 
             # Word does not exist in any document
@@ -227,11 +240,34 @@ class ReverseIndexer:
         
             idf = math.log(self.doc_count / (1 + len(related_docs)))
 
+            # # For each word, check that it exists in same or similar documents as previous words in the query.
+            # # # Also increases efficiency by checking less relevant docs that may only have one of the words
+            # if i > 0:
+            #     related_doc_ids = related_docs.keys() & prev_related_doc_ids
+            # else:
+            #     related_doc_ids = related_docs.keys()
+            # prev_related_doc_ids = related_doc_ids
+
             for doc_id, info in related_docs.items():
+                positional_score = 0
+
+                # Progressively check that the words appear next to each other in the same docs.
+                # If so, increase score.
+                if doc_id in positions:
+                    for word_position in info[2]:
+                        if str(int(word_position) - 1) in positions[doc_id]:
+                            positional_score += 0.8
+                        elif str(int(word_position) - 2) in positions[doc_id]:
+                            positional_score += 0.5
+                positions[doc_id] = info[2]
+
                 if doc_id not in scores:
-                    scores[doc_id] = {"file": info[0], "tfidf": info[1] * idf}
+                    scores[doc_id] = {"file": info[0], "tfidf": (info[1] * idf)  * (1 + positional_score)}
                 else:
-                    scores[doc_id]["tfidf"] += info[1] * idf
+                    scores[doc_id]["tfidf"] += info[1] * idf + positional_score
+            
+        self.words_index.close()
+        self.doc_index.close()
 
         return dict(sorted(scores.items(), key=lambda x: x[1]["tfidf"], reverse=True)[:number_of_results])
 
