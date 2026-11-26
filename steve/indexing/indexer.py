@@ -200,23 +200,20 @@ class ReverseIndexer:
         # Format: word|doc_id:frequency:term_ratio:positions; ...
         postings = line.split("|")[1]
         posting_list = postings.split(";")
-        related_docs = {}
-
+        
+        return posting_list
+    
+    def _get_posting_info(self, posting_list):
         for posting in posting_list:
             split_posting = posting.split(":")
             doc_id = split_posting[0]
             frequency = int(split_posting[1])
-            tf_ratio = float(split_posting[2])
-            positions = set(split_posting[3].split(","))
+            # tf_ratio = float(split_posting[2])
+            positions = list(map(int, split_posting[3].split(",")))
             
-            d_offset = self.doc_finder[doc_id]
-            self.doc_index.seek(d_offset)
-            # Format: docId | url
-            line = self.doc_index.readline()
-            # Format: {docID: [url, tf ratio, [positions,...]]}
-            related_docs[doc_id] = [line.split("|")[1], 1 + math.log(frequency), positions]
-            
-        return related_docs
+            # Format: related_docs = {docID: [log tf ratio, [positions,...]]}
+            info = [1 + math.log(frequency), positions]
+            yield doc_id, info
 
     def query(self, query, number_of_results):
         # Open the reversed index and doc index throughout entire query
@@ -230,48 +227,67 @@ class ReverseIndexer:
         related_doc_ids = None
         positions = {}
 
-        for i, word in enumerate(words):
-            print(f"Now in: {word}")
-            related_docs = self._find_related_docs(word)
+        for i, word in enumerate(words):        
+            posting_list = self._find_related_docs(word)
+            idf = math.log(self.doc_count / (1 + len(posting_list)))
 
-            # Word does not exist in any document
-            if len(related_docs) == 0:
-                continue
-        
-            idf = math.log(self.doc_count / (1 + len(related_docs)))
-
-            # # For each word, check that it exists in same or similar documents as previous words in the query.
-            # # # Also increases efficiency by checking less relevant docs that may only have one of the words
-            # if i > 0:
-            #     related_doc_ids = related_docs.keys() & prev_related_doc_ids
-            # else:
-            #     related_doc_ids = related_docs.keys()
-            # prev_related_doc_ids = related_doc_ids
-
-            for doc_id, info in related_docs.items():
+            for doc_id, info in self._get_posting_info(posting_list):
                 positional_score = 0
 
                 # Progressively check that the words appear next to each other in the same docs.
                 # If so, increase score.
                 if doc_id in positions:
-                    for word_position in info[2]:
-                        if str(int(word_position) - 1) in positions[doc_id]:
-                            positional_score += 0.8
-                        elif str(int(word_position) - 2) in positions[doc_id]:
+                    curr_positions = info[1]
+                    prev_positions = positions[doc_id]
+
+                    p1 = 0
+                    p2 = 0
+
+                    while p1 < len(curr_positions) and p2 < len(prev_positions):
+                        difference = curr_positions[p1] - prev_positions[p2]
+
+                        # Range of differences to award points to
+                        if difference <= 0:
+                            p1 += 1
+                        elif difference == 1:
+                            positional_score += 1
+                            p1 += 1
+                            p2 += 1
+                        elif difference < 5:
                             positional_score += 0.5
-                positions[doc_id] = info[2]
+                            p1 += 1
+                            p2 += 1
+                        elif difference <= 10:
+                            positional_score += 0.25
+                            p1 += 1
+                            p2 += 1
+                        elif difference > 10:
+                            p2 += 1
+                        else:
+                            p1 += 1
+
+                positions[doc_id] = info[1]
 
                 if doc_id not in scores:
-                    scores[doc_id] = {"file": info[0], "tfidf": (info[1] * idf)  * (1 + positional_score)}
+                    scores[doc_id] = {"tfidf": (info[0] * idf)  * (1 + positional_score)}
                 else:
-                    scores[doc_id]["tfidf"] += info[1] * idf + positional_score
+                    scores[doc_id]["tfidf"] += info[0] * idf + positional_score
             
+        # Retrieve the top n results as dicts in descending order
+        results = dict(heapq.nlargest(number_of_results, scores.items(), key=lambda x: x[1]["tfidf"]))
+
+        # Access disk to retrieve the urls of only the top results
+        for doc_id, _ in results.items():
+            d_offset = self.doc_finder[doc_id]
+            self.doc_index.seek(d_offset)
+            # Format: docId | url
+            line = self.doc_index.readline()
+            results[doc_id]["file"] = line.split("|")[1]
+
         self.words_index.close()
         self.doc_index.close()
 
-        return dict(sorted(scores.items(), key=lambda x: x[1]["tfidf"], reverse=True)[:number_of_results])
-
-
+        return results
 
     def print_report(self):
         size = Path(f"{self.output_path}/words_index.index").stat().st_size/1024
