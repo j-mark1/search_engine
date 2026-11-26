@@ -1,0 +1,47 @@
+20 Queries 
+Below is a list of 20 queries used to evaluate the search engine and the purpose of each one.
+ 
+**Improve effectiveness for longer words**
+    Issue: Words may not all appear on doc and do not always appear next to each other
+    FIX: Positional indexing ensures that the docs returned contain the words right next to each other
+    or as close to each other as available
+	1. master of software engineering
+	2. introduction to artificial intelligence
+
+**Improve effectiveness for common words**
+    ISSUE: Documents that are larger and contain the word rank higher despite having little relevance
+    and a lower percentage of content related to that word. In code, this is in part to using only
+    frequency and idf. 
+    FIX: Using tfidf with sublinear tf makes it so that neither long nor short documents dominate.
+    Also, positional indexing ensures that the documents returned contain the close next to each other.
+	3. linkedin
+	4. ics 46
+	5. cs 121
+	6. dynamic programming 
+
+**Improve effectiveness for very specific queries**
+    ISSUE: Documents that have very specific queries do not always get the relevant results
+    FIX: Using tfidf with sublinear tf makes it so that neither long nor short documents dominate.
+    Also, positional indexing ensures that the documents returned contain the close next to each other.
+	7. ios development
+	8. cyber @ uci
+	9. irene gassko
+	10. santa barbara
+
+**Improve efficiency for common and long queries**
+    ISSUE: Long and common queries require multiple document searches for each word in the query,
+    taking longer than smaller queries by a considerable amount
+    FIX: Using Heapq.nlargest and minimizing disk access (ex. with seek or by only getting urls of
+    the top n documents) reduces time it takes to process query
+	11. data structures and algorithms
+	12. university of california, irvine 
+	13. computer science
+	14. donald bren school of information and computer sciences
+
+**Good Queries:**
+	15. informatics
+	16. pride and prejudice
+	17. ai
+	18. in4matx
+	19. wics
+	20. pintos

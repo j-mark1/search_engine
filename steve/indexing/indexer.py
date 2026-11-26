@@ -137,7 +137,8 @@ class ReverseIndexer:
         
         word_finder = {}  # term: byte_offset
         
-        # heapq.merge streams lines across all files in sorted alphabetical order
+        # heapq.merge applies a k-way merge algorithm to sort all the lines across all files
+        # based on the word in alphabetical order
         sorted_lines = heapq.merge(*file_handles, key=lambda line: line.split("|", 1)[0])
         
         with open(f"{self.output_path}/words_index.index", "w", encoding="utf-8") as out_file:
